@@ -58,9 +58,22 @@ eventBus.on('material.stock_low', async (event) => {
 });
 
 export function registerRoutesV2(app: Express): void {
-  // 健康检查
+  // 健康检查（增强版）
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', version: '2.0', timestamp: new Date().toISOString() });
+    const memUsage = process.memoryUsage();
+    const uptime = process.uptime();
+    res.json({
+      status: 'ok',
+      version: '2.0',
+      timestamp: new Date().toISOString(),
+      uptime: Math.floor(uptime),
+      memory: {
+        rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
+      },
+      node: process.version,
+    });
   });
 
   // 登录/注册（无需认证）
