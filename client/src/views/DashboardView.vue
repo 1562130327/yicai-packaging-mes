@@ -4,6 +4,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 
 const store = useDashboardStore()
 const currentTime = ref('')
+const lastRefresh = ref('')
 let timer: ReturnType<typeof setInterval> | null = null
 
 function updateTime() {
@@ -11,6 +12,11 @@ function updateTime() {
   currentTime.value = now.toLocaleString('zh-CN', {
     hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
+}
+
+function refreshData() {
+  store.fetchData()
+  lastRefresh.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
 function getPriorityClass(p: number) {
@@ -29,11 +35,11 @@ function getMachineStatusClass(s: string) {
 }
 
 onMounted(() => {
-  store.fetchData()
+  refreshData()
   updateTime()
   timer = setInterval(() => {
     updateTime()
-    store.fetchData()
+    refreshData()
   }, 30000)
 })
 
@@ -44,6 +50,12 @@ onUnmounted(() => {
 
 <template>
   <div class="dashboard">
+    <!-- 刷新状态 -->
+    <div class="refresh-bar">
+      <span v-if="store.loading" class="refresh-status">🔄 刷新中...</span>
+      <span v-else class="refresh-status">✅ 上次刷新: {{ lastRefresh || '刚刚' }}</span>
+      <button class="btn btn-sm" @click="refreshData" :disabled="store.loading">手动刷新</button>
+    </div>
     <!-- KPI Cards -->
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -105,6 +117,8 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard { display: flex; flex-direction: column; gap: 16px; }
+.refresh-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-sm); font-size: 12px; }
+.refresh-status { color: var(--muted); }
 .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .task-list { display: flex; flex-direction: column; gap: 6px; }
 .task-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }

@@ -2,10 +2,12 @@
 import { onMounted, ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
+import { useToast } from '@/composables/useToast'
 import { workersApi, type Worker } from '@/api/workers'
 
 const auth = useAuthStore()
 const taskStore = useTasksStore()
+const toast = useToast()
 const workers = ref<Worker[]>([])
 const selectedWorker = ref('')
 const loading = ref(true)
@@ -44,19 +46,34 @@ async function loadTasks() {
 }
 
 async function handleStart(taskId: string) {
-  await taskStore.startTask(taskId)
+  try {
+    await taskStore.startTask(taskId)
+    toast.success('任务已开始')
+  } catch (e: any) {
+    toast.error(e.message || '操作失败')
+  }
 }
 
 async function handleComplete(task: any) {
   const qty = prompt(`完成数量（共 ${task.quantity}）：`, String(task.quantity))
   if (qty === null) return
-  await taskStore.completeTask(task.id, parseInt(qty) || 0, 0)
+  try {
+    await taskStore.completeTask(task.id, parseInt(qty) || 0, 0)
+    toast.success('任务已完成')
+  } catch (e: any) {
+    toast.error(e.message || '操作失败')
+  }
 }
 
 async function handlePause(taskId: string) {
   const reason = prompt('暂停原因：')
   if (reason === null) return
-  await taskStore.pauseTask(taskId, reason || '手动暂停')
+  try {
+    await taskStore.pauseTask(taskId, reason || '手动暂停')
+    toast.warning('任务已暂停')
+  } catch (e: any) {
+    toast.error(e.message || '操作失败')
+  }
 }
 
 onMounted(async () => {

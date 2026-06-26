@@ -2,9 +2,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToast()
 
 const username = ref('')
 const password = ref('')
@@ -22,9 +24,11 @@ async function handleLogin() {
 
   try {
     await auth.login(username.value, password.value)
+    toast.success('登录成功')
     router.push('/')
   } catch (e: any) {
     error.value = e.message || '登录失败'
+    toast.error(e.message || '登录失败')
   } finally {
     loading.value = false
   }
