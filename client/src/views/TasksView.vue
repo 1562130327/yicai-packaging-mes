@@ -21,6 +21,7 @@ function getPriorityClass(p: number) {
   if (p >= 2) return 'priority-p3'
   return 'priority-p4'
 }
+
 function getPriorityLabel(p: number) {
   if (p >= 5) return 'P0 紧急'
   if (p >= 4) return 'P1 高'
@@ -28,23 +29,16 @@ function getPriorityLabel(p: number) {
   if (p >= 2) return 'P3 低'
   return 'P4 最低'
 }
+
 function getStatusLabel(s: string) {
   return { pending: '待分配', assigned: '已分配', running: '进行中', completed: '已完成', paused: '已暂停', cancelled: '已取消' }[s] || s
 }
+
 function getStatusClass(s: string) {
   return { pending: 'badge-warning', assigned: 'badge-info', running: 'badge-success', completed: '', paused: 'badge-danger', cancelled: '' }[s] || ''
 }
 
-async function loadTasks() {
-  if (isWorkerView.value) {
-    await taskStore.fetchTasks({ workerId: auth.user?.id })
-  } else if (selectedWorker.value) {
-    await taskStore.fetchTasks({ workerId: selectedWorker.value })
-  } else {
-    await taskStore.fetchTasks()
-  }
-}
-
+// 操作委托给 store（UI 只负责调用）
 async function handleStart(taskId: string) {
   try {
     await taskStore.startTask(taskId)
@@ -86,6 +80,16 @@ onMounted(async () => {
     await loadTasks()
   } finally { loading.value = false }
 })
+
+async function loadTasks() {
+  if (isWorkerView.value) {
+    await taskStore.fetchTasks({ workerId: auth.user?.id })
+  } else if (selectedWorker.value) {
+    await taskStore.fetchTasks({ workerId: selectedWorker.value })
+  } else {
+    await taskStore.fetchTasks()
+  }
+}
 </script>
 
 <template>
@@ -99,7 +103,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- 筛选 -->
     <div v-if="!isWorkerView" class="filter-bar card">
       <select v-model="selectedWorker" class="form-input form-select" style="max-width:250px" @change="loadTasks">
         <option value="">全部师傅</option>
@@ -108,9 +111,7 @@ onMounted(async () => {
     </div>
 
     <div v-if="loading || taskStore.loading" class="loading">加载中...</div>
-
     <div v-else-if="taskStore.tasks.length === 0" class="empty">暂无任务</div>
-
     <div v-else class="tasks-list">
       <div v-for="task in taskStore.tasks" :key="task.id" class="task-card card">
         <div class="task-header">

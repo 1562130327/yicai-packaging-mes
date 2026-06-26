@@ -10,6 +10,8 @@ import { WorkflowService } from '../../../application/WorkflowService.js';
 import { ExecutionService } from '../../../application/ExecutionService.js';
 import { MaterialService } from '../../../application/MaterialService.js';
 import { ExceptionService } from '../../../application/ExceptionService.js';
+import { TaskFlowEngine } from '../../../modules/task-flow/TaskFlowEngine.js';
+import { registerEventHandlers } from '../../../modules/event-handlers/index.js';
 import { createTaskV2Routes } from './task-v2.routes.js';
 import { createExecutionRoutes } from './execution.routes.js';
 import { createMaterialV2Routes } from './material-v2.routes.js';
@@ -20,13 +22,6 @@ import { createDashboardRoutes } from './dashboard.routes.js';
 import { createOrderRoutes } from './order.routes.js';
 import { createMachineRoutes } from './machine.routes.js';
 import { createWorkerRoutes } from './worker.routes.js';
-import { createInventoryRoutes } from './inventory.routes.js';
-import { createCustomerRoutes } from './customer.routes.js';
-import { createProcessRoutes } from './process.routes.js';
-import { createFeedbackRoutes } from './feedback.routes.js';
-import { createReportRoutes } from './report.routes.js';
-import { createTraceRoutes } from './trace.routes.js';
-import { createWorkersAdminRoutes } from './workers-admin.routes.js';
 
 // ========== 依赖注入 ==========
 const taskRepo = new TaskRepository();
@@ -41,36 +36,23 @@ const executionService = new ExecutionService(executionRepo, eventBus, eventStor
 const materialService = new MaterialService(materialRepo, eventBus, eventStore);
 const exceptionService = new ExceptionService(exceptionRepo, taskService, eventBus, eventStore);
 
+// ========== Task Flow 引擎 ==========
+const taskFlowEngine = new TaskFlowEngine(taskService, eventBus, eventStore);
+
 // ========== 注册事件处理器 ==========
-// TaskCompleted → ExecutionService (记录生产)
-eventBus.on('task.completed', async (event) => {
-  console.log(`[EventHandler] TaskCompleted: ${event.aggregateId}`);
-});
-
-// ExceptionRaised → TaskPaused (异常暂停任务)
-eventBus.on('exception.raised', async (event) => {
-  console.log(`[EventHandler] ExceptionRaised: ${event.aggregateId}`);
-});
-
-// MaterialStockLow → 通知
-eventBus.on('material.stock_low', async (event) => {
-  console.log(`[EventHandler] MaterialStockLow: ${event.payload.batchNo}`);
-});
+registerEventHandlers(eventBus, eventStore);
 
 export function registerRoutesV2(app: Express): void {
-  // 健康检查（增强版）
+  // 健康检查
   app.get('/api/health', (_req, res) => {
     const memUsage = process.memoryUsage();
-    const uptime = process.uptime();
     res.json({
       status: 'ok',
       version: '2.0',
-      timestamp: new Date().toISOString(),
-      uptime: Math.floor(uptime),
+      uptime: Math.floor(process.uptime()),
       memory: {
         rss: Math.round(memUsage.rss / 1024 / 1024) + 'MB',
         heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB',
-        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + 'MB',
       },
       node: process.version,
     });
@@ -79,24 +61,35 @@ export function registerRoutesV2(app: Express): void {
   // 登录/注册（无需认证）
   app.use('/api/users', createUserRoutes());
 
-  // 以下路由需要认证
-  app.use('/api/dashboard', authMiddleware, createDashboardRoutes());
-  app.use('/api/orders', authMiddleware, createOrderRoutes());
+  // ========== 核心业务路由（Task-driven） ==========
   app.use('/api/tasks', authMiddleware, createTaskV2Routes(taskService));
   app.use('/api/executions', authMiddleware, createExecutionRoutes(executionService));
   app.use('/api/materials', authMiddleware, createMaterialV2Routes(materialService));
   app.use('/api/exceptions', authMiddleware, createExceptionRoutes(exceptionService));
+
+  // ========== 辅助路由 ==========
+  app.use('/api/dashboard', authMiddleware, createDashboardRoutes());
+  app.use('/api/orders', authMiddleware, createOrderRoutes());
   app.use('/api/machines', authMiddleware, createMachineRoutes());
   app.use('/api/workers', authMiddleware, createWorkerRoutes());
-  app.use('/api/workers-admin', authMiddleware, createWorkersAdminRoutes());
-  app.use('/api/inventory', authMiddleware, createInventoryRoutes());
-  app.use('/api/customers', authMiddleware, createCustomerRoutes());
-  app.use('/api/processes', authMiddleware, createProcessRoutes());
-  app.use('/api/feedback', authMiddleware, createFeedbackRoutes());
-  app.use('/api/reports', authMiddleware, createReportRoutes());
-  app.use('/api/traces', authMiddleware, createTraceRoutes());
 
-  // 事件查询（调试用）
+  // ========== Task Flow API ==========
+  // POST /api/task-flow/start — 启动工作流（Order → Workflow → Task）
+  app.post('/api/task-flow/start', authMiddleware, async (req, res) => {
+    try {
+      const { orderId, templateName, quantity } = req.body;
+      if (!orderId || !templateName || !quantity) {
+        res.status(400).json({ success: false, error: 'Missing required fields' });
+        return;
+      }
+      await taskFlowEngine.startWorkflow(orderId, templateName, quantity);
+      res.json({ success: true, message: 'Workflow started' });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ========== 事件查询 ==========
   app.get('/api/events', authMiddleware, (_req, res) => {
     try {
       const events = eventStore.findRecent(50);
@@ -106,5 +99,5 @@ export function registerRoutesV2(app: Express): void {
     }
   });
 
-  console.log('[Routes V2] All modules registered (Task + Execution + Material + Exception)');
+  console.log('[Routes] Task-driven architecture ready');
 }

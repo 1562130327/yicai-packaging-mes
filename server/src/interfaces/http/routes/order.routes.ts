@@ -42,7 +42,7 @@ export function createOrderRoutes(): Router {
       }
       const id = uuidv4();
       const code = `ORD-${String(Date.now()).slice(-6)}`;
-      execute(`INSERT INTO orders (id, code, product_code, customer_name, category, process_type, priority, status, material_spec, sheet_size, quantity, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`,
+      execute(`INSERT INTO orders (id, code, product_code, customer_name, category, process_type, priority, status, material_spec, sheet_size, slice_size, slice_qty, sheet_opened, sheet_cut, punched, quantity, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, '', 0, 0, 0, 0, ?, ?, datetime('now','localtime'), datetime('now','localtime'))`,
         [id, code, productCode, customerName, category || '', processType || '', priority || 'normal', materialSpec || '', sheetSize || '', quantity || 0, dueDate || '']);
       res.status(201).json({ success: true, data: { id, code } });
     } catch (error: any) {

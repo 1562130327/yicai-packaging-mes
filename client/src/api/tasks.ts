@@ -43,3 +43,9 @@ export const tasksApi = {
   cancel: (id: string, reason?: string) =>
     api.put<{ success: boolean }>(`/tasks/${id}/cancel`, { reason }),
 }
+
+// Task Flow API
+export const taskFlowApi = {
+  start: (data: { orderId: string; templateName: string; quantity: number }) =>
+    api.post<{ success: boolean; message: string }>('/task-flow/start', data),
+}
