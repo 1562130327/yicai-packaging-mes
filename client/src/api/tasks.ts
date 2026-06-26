@@ -1,25 +1,10 @@
 import { api } from './request'
 
-export interface Task {
-  id: string
-  stepId: string
-  orderId: string
-  workerId: string | null
-  machineId: string | null
-  status: 'pending' | 'assigned' | 'running' | 'completed' | 'paused' | 'cancelled'
-  priority: number
-  quantity: number
-  completedQty: number
-  startedAt: string | null
-  completedAt: string | null
-}
+// 使用共享类型
+export type { Task, TaskStatus, Priority, TaskStats, AssignTaskAction, CompleteTaskAction, StartWorkflowAction } from '../../../packages/shared/task.js'
+export { TASK_STATUS_RULES, PRIORITY_RULES, canTransition, canPerformAction, getStatusLabel, getStatusStyle, getPriorityLabel, getPriorityStyle } from '../../../packages/shared/task.js'
 
-export interface TaskStats {
-  pending: number
-  assigned: number
-  running: number
-  completed: number
-}
+import type { Task, TaskStats, StartWorkflowAction } from '../../../packages/shared/task.js'
 
 export const tasksApi = {
   list: (params?: { status?: string; workerId?: string; orderId?: string }) => {
@@ -28,8 +13,6 @@ export const tasksApi = {
   },
   get: (id: string) => api.get<{ success: boolean; data: Task }>(`/tasks/${id}`),
   stats: () => api.get<{ success: boolean; data: TaskStats }>('/tasks/stats'),
-  create: (data: { stepId: string; orderId: string; quantity: number; priority?: number }) =>
-    api.post<{ success: boolean; data: { id: string; status: string } }>('/tasks', data),
   assign: (id: string, workerId: string, machineId: string) =>
     api.put<{ success: boolean }>(`/tasks/${id}/assign`, { workerId, machineId }),
   start: (id: string) =>
@@ -44,8 +27,7 @@ export const tasksApi = {
     api.put<{ success: boolean }>(`/tasks/${id}/cancel`, { reason }),
 }
 
-// Task Flow API
 export const taskFlowApi = {
-  start: (data: { orderId: string; templateName: string; quantity: number }) =>
+  start: (data: StartWorkflowAction) =>
     api.post<{ success: boolean; message: string }>('/task-flow/start', data),
 }

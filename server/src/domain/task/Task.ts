@@ -1,10 +1,9 @@
 import { AggregateRoot } from '../shared/AggregateRoot.js';
 import { DomainEvent } from '../shared/DomainEvent.js';
 
-/**
- * Task 状态枚举
- */
-export type TaskStatus = 'pending' | 'assigned' | 'running' | 'completed' | 'paused' | 'cancelled';
+// 从共享包导入类型（前后端共享同一套定义）
+export type { TaskStatus } from '../../../../packages/shared/task.js';
+import type { TaskStatus } from '../../../../packages/shared/task.js';
 
 /**
  * Task 领域事件

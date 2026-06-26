@@ -4,6 +4,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useTasksStore } from '@/stores/tasks'
 import { useToast } from '@/composables/useToast'
 import { workersApi, type Worker } from '@/api/workers'
+// 使用共享类型 — 前端不再定义业务规则
+import { getStatusLabel, getStatusStyle, getPriorityLabel, getPriorityStyle, canPerformAction } from '@/api/tasks'
+import type { Task, TaskStatus } from '@/api/tasks'
 
 const auth = useAuthStore()
 const taskStore = useTasksStore()
@@ -14,31 +17,7 @@ const loading = ref(true)
 
 const isWorkerView = computed(() => auth.user?.role === 'worker')
 
-function getPriorityClass(p: number) {
-  if (p >= 5) return 'priority-p0'
-  if (p >= 4) return 'priority-p1'
-  if (p >= 3) return 'priority-p2'
-  if (p >= 2) return 'priority-p3'
-  return 'priority-p4'
-}
-
-function getPriorityLabel(p: number) {
-  if (p >= 5) return 'P0 紧急'
-  if (p >= 4) return 'P1 高'
-  if (p >= 3) return 'P2 中'
-  if (p >= 2) return 'P3 低'
-  return 'P4 最低'
-}
-
-function getStatusLabel(s: string) {
-  return { pending: '待分配', assigned: '已分配', running: '进行中', completed: '已完成', paused: '已暂停', cancelled: '已取消' }[s] || s
-}
-
-function getStatusClass(s: string) {
-  return { pending: 'badge-warning', assigned: 'badge-info', running: 'badge-success', completed: '', paused: 'badge-danger', cancelled: '' }[s] || ''
-}
-
-// 操作委托给 store（UI 只负责调用）
+// UI 只负责调用 action，不做业务判断
 async function handleStart(taskId: string) {
   try {
     await taskStore.startTask(taskId)
@@ -48,7 +27,7 @@ async function handleStart(taskId: string) {
   }
 }
 
-async function handleComplete(task: any) {
+async function handleComplete(task: Task) {
   const qty = prompt(`完成数量（共 ${task.quantity}）：`, String(task.quantity))
   if (qty === null) return
   try {
@@ -115,8 +94,10 @@ async function loadTasks() {
     <div v-else class="tasks-list">
       <div v-for="task in taskStore.tasks" :key="task.id" class="task-card card">
         <div class="task-header">
-          <span class="priority" :class="getPriorityClass(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
-          <span class="badge" :class="getStatusClass(task.status)">{{ getStatusLabel(task.status) }}</span>
+          <!-- 使用共享类型显示优先级 -->
+          <span class="priority" :class="getPriorityStyle(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
+          <!-- 使用共享类型显示状态 -->
+          <span class="badge" :class="getStatusStyle(task.status)">{{ getStatusLabel(task.status) }}</span>
         </div>
         <div class="task-info">
           <div class="task-label">任务ID</div>
@@ -127,9 +108,10 @@ async function loadTasks() {
           <div class="task-value">{{ task.quantity }} (已完成: {{ task.completedQty }})</div>
         </div>
         <div class="task-actions">
-          <button v-if="task.status === 'assigned'" class="btn btn-sm btn-primary" @click="handleStart(task.id)">开始</button>
-          <button v-if="task.status === 'running'" class="btn btn-sm" @click="handleComplete(task)">完成</button>
-          <button v-if="task.status === 'running'" class="btn btn-sm" style="color:var(--warning)" @click="handlePause(task.id)">暂停</button>
+          <!-- 使用共享规则判断是否显示按钮 -->
+          <button v-if="canPerformAction(task.status, 'start')" class="btn btn-sm btn-primary" @click="handleStart(task.id)">开始</button>
+          <button v-if="canPerformAction(task.status, 'complete')" class="btn btn-sm" @click="handleComplete(task)">完成</button>
+          <button v-if="canPerformAction(task.status, 'pause')" class="btn btn-sm" style="color:var(--warning)" @click="handlePause(task.id)">暂停</button>
         </div>
       </div>
     </div>
