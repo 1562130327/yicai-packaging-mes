@@ -1,5 +1,5 @@
 import { DomainEvent } from '../../domain/shared/DomainEvent.js';
-import { execute, queryAll } from '../database.js';
+import { execute, getDb, queryAll } from '../database.js';
 
 /**
  * 事件存储
@@ -24,12 +24,29 @@ export class EventStore {
   }
 
   /**
-   * 批量保存事件
+   * 批量保存事件（事务包装，保证原子性）
    */
   saveAll(events: DomainEvent[]): void {
-    for (const event of events) {
-      this.save(event);
-    }
+    if (events.length === 0) return;
+
+    const insertEvent = getDb().prepare(
+      `INSERT INTO domain_events (id, aggregate_type, aggregate_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+
+    const insertAll = getDb().transaction((evts: DomainEvent[]) => {
+      for (const event of evts) {
+        insertEvent.run(
+          event.eventId,
+          event.aggregateType,
+          event.aggregateId,
+          event.eventType,
+          JSON.stringify(event.payload),
+          event.timestamp.toISOString()
+        );
+      }
+    });
+
+    insertAll(events);
   }
 
   /**

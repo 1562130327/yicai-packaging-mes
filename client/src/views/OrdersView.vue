@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ordersApi, type Order } from '@/api/orders'
+import { ordersApi, type Order, getOrderPriorityLabel, getOrderPriorityStyle, getOrderStatusLabel, getOrderStatusStyle } from '@/api/orders'
 
 const router = useRouter()
 const orders = ref<Order[]>([])
 const loading = ref(true)
 const editingOrder = ref<Order | null>(null)
-const editForm = ref<any>({})
+const editForm = ref<Partial<Order>>({})
 const showEditModal = ref(false)
 
 // 筛选
@@ -26,19 +26,6 @@ const filteredOrders = computed(() => {
     return true
   })
 })
-
-function getPriorityClass(p: string) {
-  return { deadline: 'priority-p0', urgent: 'priority-p1', normal: 'priority-p2', attention: 'priority-p3', unmentioned: 'priority-p4' }[p] || ''
-}
-function getPriorityLabel(p: string) {
-  return { deadline: 'P0 紧急', urgent: 'P1 高', normal: 'P2 中', attention: 'P3 低', unmentioned: 'P4 最低' }[p] || p
-}
-function getStatusLabel(s: string) {
-  return { pending: '待排产', scheduled: '已排产', in_progress: '生产中', completed: '已完成', cancelled: '已取消' }[s] || s
-}
-function getStatusClass(s: string) {
-  return { pending: 'badge-warning', scheduled: 'badge-info', in_progress: 'badge-success', completed: '', cancelled: '' }[s] || ''
-}
 function getDaysLeft(date: string) {
   if (!date) return '-'
   const diff = Math.ceil((new Date(date).getTime() - Date.now()) / 86400000)
@@ -143,9 +130,9 @@ onMounted(loadData)
             <td><span class="mono">{{ order.code }}</span></td>
             <td>{{ order.customerName }}</td>
             <td>{{ order.productCode || '-' }}</td>
-            <td><span class="priority" :class="getPriorityClass(order.priority)">{{ getPriorityLabel(order.priority) }}</span></td>
+            <td><span class="priority" :class="getOrderPriorityStyle(order.priority)">{{ getOrderPriorityLabel(order.priority) }}</span></td>
             <td :class="getDaysLeftClass(order.dueDate)">{{ getDaysLeft(order.dueDate) }}</td>
-            <td><span class="badge" :class="getStatusClass(order.status)">{{ getStatusLabel(order.status) }}</span></td>
+            <td><span class="badge" :class="getOrderStatusStyle(order.status)">{{ getOrderStatusLabel(order.status) }}</span></td>
             <td @click.stop>
               <div class="action-btns">
                 <button class="btn btn-sm" @click="openEdit(order)">编辑</button>

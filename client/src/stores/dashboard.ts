@@ -1,20 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@/api/request'
-
-export interface DashboardData {
-  kpi: {
-    activeOrders: number
-    pendingTasks: number
-    runningTasks: number
-    completedToday: number
-    inventoryAlerts: number
-    anomalyCount: number
-  }
-  recentTasks: any[]
-  machines: any[]
-  workers: any[]
-}
+import { dashboardApi, type DashboardData } from '@/api/dashboard'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const data = ref<DashboardData | null>(null)
@@ -25,7 +11,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     loading.value = true
     error.value = null
     try {
-      const res = await api.get<{ success: boolean; data: DashboardData }>('/dashboard')
+      const res = await dashboardApi.getData()
       if (res.success) data.value = res.data
     } catch (e: any) {
       error.value = e.message

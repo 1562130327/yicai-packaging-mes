@@ -15,6 +15,24 @@ export class TaskService {
   ) {}
 
   /**
+   * 通用命令执行模板
+   * 查找聚合根 → 执行领域命令 → 持久化 → 发布事件
+   */
+  private async executeCommand(taskId: string, command: (task: Task) => void): Promise<Task> {
+    const task = await this.taskRepo.findById(taskId);
+    if (!task) throw new Error('Task not found');
+
+    command(task);
+    await this.taskRepo.save(task);
+
+    const events = task.pullEvents();
+    this.eventStore.saveAll(events);
+    await this.eventBus.publishAll(events);
+
+    return task;
+  }
+
+  /**
    * 创建任务
    */
   async createTask(params: {
@@ -45,90 +63,42 @@ export class TaskService {
    * 分配任务
    */
   async assignTask(taskId: string, workerId: string, machineId: string): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.assign(workerId, machineId);
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.assign(workerId, machineId));
   }
 
   /**
    * 开始任务
    */
   async startTask(taskId: string): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.start();
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.start());
   }
 
   /**
    * 完成任务
    */
   async completeTask(taskId: string, quantity: number, defectQty: number = 0): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.complete(quantity, defectQty);
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.complete(quantity, defectQty));
   }
 
   /**
    * 暂停任务
    */
   async pauseTask(taskId: string, reason: string): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.pause(reason);
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.pause(reason));
   }
 
   /**
    * 恢复任务
    */
   async resumeTask(taskId: string): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.resume();
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.resume());
   }
 
   /**
    * 取消任务
    */
   async cancelTask(taskId: string, reason: string): Promise<void> {
-    const task = await this.taskRepo.findById(taskId);
-    if (!task) throw new Error('Task not found');
-
-    task.cancel(reason);
-    await this.taskRepo.save(task);
-
-    const events = task.pullEvents();
-    this.eventStore.saveAll(events);
-    await this.eventBus.publishAll(events);
+    await this.executeCommand(taskId, (task) => task.cancel(reason));
   }
 
   /**

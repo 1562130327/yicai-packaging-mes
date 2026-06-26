@@ -1,28 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ordersApi, type Order } from '@/api/orders'
+import { ordersApi, type Order, getOrderPriorityLabel, getOrderPriorityStyle, getOrderStatusLabel, getOrderStepTypeLabel, getOrderStepStatusLabel } from '@/api/orders'
 
 const route = useRoute()
 const router = useRouter()
-const order = ref<any>(null)
+const order = ref<Order | null>(null)
 const loading = ref(true)
-
-function getPriorityClass(p: string) {
-  return { deadline: 'priority-p0', urgent: 'priority-p1', normal: 'priority-p2', attention: 'priority-p3', unmentioned: 'priority-p4' }[p] || ''
-}
-function getPriorityLabel(p: string) {
-  return { deadline: 'P0 紧急', urgent: 'P1 高', normal: 'P2 中', attention: 'P3 低', unmentioned: 'P4 最低' }[p] || p
-}
-function getStatusLabel(s: string) {
-  return { pending: '待排产', scheduled: '已排产', in_progress: '生产中', completed: '已完成', cancelled: '已取消' }[s] || s
-}
-function getStepTypeLabel(t: string) {
-  return { cutting: '下料', slicing: '裁切', welding: '焊接', pressing: '压合', inspection: '检验', packaging: '入库' }[t] || t
-}
-function getStepStatusLabel(s: string) {
-  return { waiting: '等待', ready: '就绪', running: '进行中', done: '已完成', paused: '已暂停' }[s] || s
-}
 
 onMounted(async () => {
   try {
@@ -45,13 +29,13 @@ onMounted(async () => {
       <!-- 基本信息 -->
       <div class="card info-card">
         <h3>{{ order.code }}</h3>
-        <div class="info-row"><span class="label">客户</span><span>{{ order.customer_name }}</span></div>
-        <div class="info-row"><span class="label">产品</span><span>{{ order.product_code || '-' }}</span></div>
-        <div class="info-row"><span class="label">材料</span><span>{{ order.material_spec || '-' }}</span></div>
-        <div class="info-row"><span class="label">优先级</span><span class="priority" :class="getPriorityClass(order.priority)">{{ getPriorityLabel(order.priority) }}</span></div>
-        <div class="info-row"><span class="label">状态</span><span>{{ getStatusLabel(order.status) }}</span></div>
-        <div class="info-row"><span class="label">交期</span><span>{{ order.due_date || '-' }}</span></div>
-        <div class="info-row"><span class="label">创建时间</span><span>{{ order.created_at }}</span></div>
+        <div class="info-row"><span class="label">客户</span><span>{{ order.customerName }}</span></div>
+        <div class="info-row"><span class="label">产品</span><span>{{ order.productCode || '-' }}</span></div>
+        <div class="info-row"><span class="label">材料</span><span>{{ order.materialSpec || '-' }}</span></div>
+        <div class="info-row"><span class="label">优先级</span><span class="priority" :class="getOrderPriorityStyle(order.priority)">{{ getOrderPriorityLabel(order.priority) }}</span></div>
+        <div class="info-row"><span class="label">状态</span><span>{{ getOrderStatusLabel(order.status) }}</span></div>
+        <div class="info-row"><span class="label">交期</span><span>{{ order.dueDate || '-' }}</span></div>
+        <div class="info-row"><span class="label">创建时间</span><span>{{ order.createdAt }}</span></div>
       </div>
 
       <!-- 工序流 -->
@@ -61,11 +45,11 @@ onMounted(async () => {
           <div v-for="step in order.steps" :key="step.id" class="step-item">
             <div class="step-seq">{{ step.sequence }}</div>
             <div class="step-info">
-              <div class="step-name">{{ getStepTypeLabel(step.type) }}</div>
-              <div class="step-detail">{{ step.completed_qty || 0 }}/{{ step.required_qty || 0 }}</div>
+              <div class="step-name">{{ getOrderStepTypeLabel(step.type) }}</div>
+              <div class="step-detail">{{ step.completedQty || 0 }}/{{ step.requiredQty || 0 }}</div>
             </div>
             <span class="badge" :class="step.status === 'done' ? 'badge-success' : step.status === 'running' ? 'badge-info' : ''">
-              {{ getStepStatusLabel(step.status) }}
+              {{ getOrderStepStatusLabel(step.status) }}
             </span>
           </div>
         </div>

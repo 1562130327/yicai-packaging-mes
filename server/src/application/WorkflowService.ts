@@ -3,7 +3,7 @@ import { WorkflowRepository } from '../domain/workflow/WorkflowRepository.js';
 import { TaskService } from './TaskService.js';
 import { EventBus } from '../infrastructure/events/EventBus.js';
 import { EventStore } from '../infrastructure/events/EventStore.js';
-import { queryOne } from '../infrastructure/database.js';
+import { queryOne, queryAll } from '../infrastructure/database.js';
 
 /**
  * 工艺模板（从 process_templates 表读取）
@@ -124,7 +124,6 @@ export class WorkflowService {
    * 获取所有模板
    */
   getTemplates(): ProcessTemplate[] {
-    const { queryAll } = require('../infrastructure/database.js');
     const rows = queryAll(`SELECT * FROM process_templates`);
     return rows.map((r: any) => ({
       id: r.id,

@@ -1,5 +1,20 @@
 import { api } from './request'
 
+// 使用共享类型
+export type { OrderStatus, OrderPriority, OrderStepType, OrderStepStatus } from '../../../packages/shared/order.js'
+export { ORDER_STATUS_RULES, ORDER_PRIORITY_RULES, getOrderStatusLabel, getOrderStatusStyle, getOrderPriorityLabel, getOrderPriorityStyle, getOrderStepTypeLabel, getOrderStepStatusLabel, canTransitionOrder, canPerformOrderAction } from '../../../packages/shared/order.js'
+
+import type { OrderStatus, OrderPriority } from '../../../packages/shared/order.js'
+
+export interface OrderStep {
+  id: string
+  sequence: number
+  type: string
+  status: string
+  completedQty: number
+  requiredQty: number
+}
+
 export interface Order {
   id: string
   code: string
@@ -7,13 +22,14 @@ export interface Order {
   customerName: string
   category: string
   processType: string
-  priority: string
-  status: string
+  priority: OrderPriority
+  status: OrderStatus
   materialSpec: string
   sheetSize: string
   quantity: number
   dueDate: string
   createdAt: string
+  steps?: OrderStep[]
 }
 
 export interface OrderCreateInput {
@@ -21,7 +37,7 @@ export interface OrderCreateInput {
   customerName: string
   category: string
   processType: string
-  priority?: string
+  priority?: OrderPriority
   materialSpec: string
   sheetSize: string
   quantity: number

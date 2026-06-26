@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { workersApi, type Worker } from '@/api/workers'
+import { workersApi, type Worker, getWorkerStatusLabel } from '@/api/workers'
 
 const workers = ref<Worker[]>([])
 const loading = ref(true)
-
-function getStatusLabel(s: string) {
-  return { active: '在岗', inactive: '休息', offline: '离线' }[s] || s
-}
 
 onMounted(async () => {
   try {
@@ -32,7 +28,7 @@ onMounted(async () => {
           <div class="worker-name">{{ w.name }}</div>
           <div class="worker-role">{{ w.role }}</div>
         </div>
-        <span class="badge badge-success">{{ getStatusLabel(w.status) }}</span>
+        <span class="badge badge-success">{{ getWorkerStatusLabel(w.status) }}</span>
       </div>
     </div>
   </div>

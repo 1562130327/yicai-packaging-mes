@@ -111,12 +111,18 @@ export class Workflow extends AggregateRoot {
 
   /**
    * 获取下一个待执行的步骤
+   * 只有当前驱步骤全部完成时才返回该步骤
    */
   getNextStep(): WorkflowStep | null {
     const ordered = this.getOrderedSteps();
     for (const step of ordered) {
       if (step.status === 'waiting' || step.status === 'ready') {
-        return step;
+        // 检查所有前驱步骤是否都已完成
+        const predecessors = ordered.filter(s => s.sequence < step.sequence);
+        const allPredecessorsDone = predecessors.every(s => s.status === 'done');
+        if (allPredecessorsDone) {
+          return step;
+        }
       }
     }
     return null;

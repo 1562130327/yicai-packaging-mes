@@ -1,13 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { machinesApi, type Machine } from '@/api/machines'
+import { machinesApi, type Machine, getMachineStatusLabel } from '@/api/machines'
 
 const machines = ref<Machine[]>([])
 const loading = ref(true)
-
-function getStatusLabel(s: string) {
-  return { running: '运行中', idle: '空闲', fault: '故障', maintenance: '维护中', offline: '离线' }[s] || s
-}
 
 onMounted(async () => {
   try {
@@ -33,7 +29,7 @@ onMounted(async () => {
         </div>
         <div class="machine-name">{{ m.name }}</div>
         <div class="machine-type">{{ m.type }}</div>
-        <div class="machine-status-text">{{ getStatusLabel(m.status) }}</div>
+        <div class="machine-status-text">{{ getMachineStatusLabel(m.status) }}</div>
       </div>
     </div>
   </div>

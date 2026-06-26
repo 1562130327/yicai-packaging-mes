@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import { getStatusLabel, getPriorityStyle } from '@/api/tasks'
+import { getMachineStatusStyle } from '@/api/machines'
 
 const store = useDashboardStore()
 const currentTime = ref('')
@@ -17,21 +19,6 @@ function updateTime() {
 function refreshData() {
   store.fetchData()
   lastRefresh.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
-function getPriorityClass(p: number) {
-  if (p >= 5) return 'priority-p0'
-  if (p >= 4) return 'priority-p1'
-  if (p >= 3) return 'priority-p2'
-  return 'priority-p3'
-}
-
-function getStatusLabel(s: string) {
-  return { pending: '待分配', assigned: '已分配', running: '进行中', completed: '已完成' }[s] || s
-}
-
-function getMachineStatusClass(s: string) {
-  return { running: 'badge-success', idle: 'badge-info', fault: 'badge-danger', maintenance: 'badge-warning' }[s] || ''
 }
 
 onMounted(() => {
@@ -89,7 +76,7 @@ onUnmounted(() => {
         </div>
         <div v-if="store.data?.recentTasks?.length" class="task-list">
           <div v-for="task in store.data.recentTasks" :key="task.id" class="task-item">
-            <span class="priority" :class="getPriorityClass(task.priority)">{{ task.priority }}</span>
+            <span class="priority" :class="getPriorityStyle(task.priority)">{{ task.priority }}</span>
             <span class="task-status badge" :class="getStatusLabel(task.status)">{{ getStatusLabel(task.status) }}</span>
             <span class="task-qty">{{ task.quantity }}件</span>
           </div>
@@ -106,7 +93,7 @@ onUnmounted(() => {
           <div v-for="m in store.data.machines" :key="m.id" class="machine-item">
             <span class="status-dot" :class="m.status"></span>
             <span class="machine-code">{{ m.code }}</span>
-            <span class="badge" :class="getMachineStatusClass(m.status)">{{ m.status }}</span>
+            <span class="badge" :class="getMachineStatusStyle(m.status)">{{ m.status }}</span>
           </div>
         </div>
         <div v-else class="empty">暂无机器数据</div>

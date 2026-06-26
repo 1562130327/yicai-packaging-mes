@@ -22,6 +22,7 @@ import { createDashboardRoutes } from './dashboard.routes.js';
 import { createOrderRoutes } from './order.routes.js';
 import { createMachineRoutes } from './machine.routes.js';
 import { createWorkerRoutes } from './worker.routes.js';
+import { createTaskFlowRoutes } from './task-flow.routes.js';
 
 // ========== 依赖注入 ==========
 const taskRepo = new TaskRepository();
@@ -37,7 +38,8 @@ const materialService = new MaterialService(materialRepo, eventBus, eventStore);
 const exceptionService = new ExceptionService(exceptionRepo, taskService, eventBus, eventStore);
 
 // ========== Task Flow 引擎 ==========
-const taskFlowEngine = new TaskFlowEngine(taskService, eventBus, eventStore);
+const taskFlowEngine = new TaskFlowEngine(taskService, eventBus, eventStore, workflowRepo);
+taskFlowEngine.start();
 
 // ========== 注册事件处理器 ==========
 registerEventHandlers(eventBus, eventStore);
@@ -74,20 +76,7 @@ export function registerRoutesV2(app: Express): void {
   app.use('/api/workers', authMiddleware, createWorkerRoutes());
 
   // ========== Task Flow API ==========
-  // POST /api/task-flow/start — 启动工作流（Order → Workflow → Task）
-  app.post('/api/task-flow/start', authMiddleware, async (req, res) => {
-    try {
-      const { orderId, templateName, quantity } = req.body;
-      if (!orderId || !templateName || !quantity) {
-        res.status(400).json({ success: false, error: 'Missing required fields' });
-        return;
-      }
-      await taskFlowEngine.startWorkflow(orderId, templateName, quantity);
-      res.json({ success: true, message: 'Workflow started' });
-    } catch (error: any) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
+  app.use('/api/task-flow', authMiddleware, createTaskFlowRoutes(taskFlowEngine));
 
   // ========== 事件查询 ==========
   app.get('/api/events', authMiddleware, (_req, res) => {

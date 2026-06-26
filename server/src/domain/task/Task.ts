@@ -63,6 +63,17 @@ export class TaskPaused extends DomainEvent {
   }
 }
 
+export class TaskResumed extends DomainEvent {
+  constructor(taskId: string, workerId: string) {
+    super({
+      eventType: 'task.resumed',
+      aggregateType: 'task',
+      aggregateId: taskId,
+      payload: { workerId },
+    });
+  }
+}
+
 export class TaskCancelled extends DomainEvent {
   constructor(taskId: string, reason: string) {
     super({
@@ -222,7 +233,7 @@ export class Task extends AggregateRoot {
     }
     this._status = 'running';
     this._updatedAt = new Date();
-    this.addEvent(new TaskStarted(this.id, this._workerId!));
+    this.addEvent(new TaskResumed(this.id, this._workerId!));
   }
 
   /**
