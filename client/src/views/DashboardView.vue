@@ -9,73 +9,32 @@ let timer: ReturnType<typeof setInterval> | null = null
 function updateTime() {
   const now = new Date()
   currentTime.value = now.toLocaleString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   })
 }
 
-function getPriorityClass(priority: string) {
-  const map: Record<string, string> = {
-    deadline: 'priority-p0',
-    urgent: 'priority-p1',
-    normal: 'priority-p2',
-    attention: 'priority-p3',
-    unmentioned: 'priority-p4',
-  }
-  return map[priority] || ''
+function getPriorityClass(p: number) {
+  if (p >= 5) return 'priority-p0'
+  if (p >= 4) return 'priority-p1'
+  if (p >= 3) return 'priority-p2'
+  return 'priority-p3'
 }
 
-function getPriorityLabel(priority: string) {
-  const map: Record<string, string> = {
-    deadline: 'P0 紧急',
-    urgent: 'P1 高',
-    normal: 'P2 中',
-    attention: 'P3 低',
-    unmentioned: 'P4 最低',
-  }
-  return map[priority] || priority
+function getStatusLabel(s: string) {
+  return { pending: '待分配', assigned: '已分配', running: '进行中', completed: '已完成' }[s] || s
 }
 
-function getStatusClass(status: string) {
-  const map: Record<string, string> = {
-    running: 'badge-success',
-    idle: 'badge-info',
-    fault: 'badge-danger',
-    maintenance: 'badge-warning',
-    offline: '',
-  }
-  return map[status] || ''
-}
-
-function getStatusLabel(status: string) {
-  const map: Record<string, string> = {
-    running: '运行中',
-    idle: '空闲',
-    fault: '故障',
-    maintenance: '维护中',
-    offline: '离线',
-  }
-  return map[status] || status
-}
-
-function getPipelineStageName(stage: string) {
-  const map: Record<string, string> = {
-    cutting: '下料',
-    slicing: '裁切',
-    welding: '焊接',
-    pressing: '压合',
-    inspection: '检验',
-    packaging: '入库',
-  }
-  return map[stage] || stage
+function getMachineStatusClass(s: string) {
+  return { running: 'badge-success', idle: 'badge-info', fault: 'badge-danger', maintenance: 'badge-warning' }[s] || ''
 }
 
 onMounted(() => {
   store.fetchData()
   updateTime()
-  timer = setInterval(updateTime, 1000)
+  timer = setInterval(() => {
+    updateTime()
+    store.fetchData()
+  }, 30000)
 })
 
 onUnmounted(() => {
@@ -91,300 +50,68 @@ onUnmounted(() => {
         <div class="kpi-label">活跃订单</div>
         <div class="kpi-value">{{ store.data?.kpi.activeOrders || 0 }}</div>
       </div>
-      <div class="kpi-card kpi-warning" v-if="(store.data?.kpi.inventoryAlerts || 0) > 0">
+      <div class="kpi-card">
+        <div class="kpi-label">待分配任务</div>
+        <div class="kpi-value" style="color:var(--warning)">{{ store.data?.kpi.pendingTasks || 0 }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">进行中任务</div>
+        <div class="kpi-value" style="color:var(--success)">{{ store.data?.kpi.runningTasks || 0 }}</div>
+      </div>
+      <div class="kpi-card" v-if="(store.data?.kpi.inventoryAlerts || 0) > 0">
         <div class="kpi-label">⚠️ 库存预警</div>
         <div class="kpi-value" style="color:var(--warning)">{{ store.data?.kpi.inventoryAlerts || 0 }}</div>
-        <div class="kpi-change">其中 {{ store.data?.kpi.criticalInventory || 0 }} 项严重不足</div>
       </div>
-      <div class="kpi-card kpi-danger" v-if="(store.data?.kpi.anomalyCount || 0) > 0">
+      <div class="kpi-card" v-if="(store.data?.kpi.anomalyCount || 0) > 0">
         <div class="kpi-label">🚨 异常事件</div>
         <div class="kpi-value" style="color:var(--danger)">{{ store.data?.kpi.anomalyCount || 0 }}</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-label">产线利用率</div>
-        <div class="kpi-value">{{ store.data?.kpi.machineUtilization || '0%' }}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-label">在岗人员</div>
-        <div class="kpi-value">{{ store.data?.kpi.personnelOnDuty || 0 }}</div>
-      </div>
     </div>
 
-    <!-- Main Content Grid -->
+    <!-- 主内容 -->
     <div class="dashboard-grid">
-      <!-- Orders Panel -->
-      <div class="card orders-panel">
+      <!-- 任务列表 -->
+      <div class="card">
         <div class="card-header">
-          <div class="card-title">📦 订单池</div>
-          <span class="badge badge-info">{{ store.data?.orders.length || 0 }} 单</span>
+          <div class="card-title">📋 最近任务</div>
         </div>
-        <div class="orders-list">
-          <div
-            v-for="order in store.data?.orders"
-            :key="order.id"
-            class="order-item"
-          >
-            <div class="order-header">
-              <span class="order-code">{{ order.code }}</span>
-              <span class="priority" :class="getPriorityClass(order.priority)">
-                {{ getPriorityLabel(order.priority) }}
-              </span>
-            </div>
-            <div class="order-product">{{ order.productCode }}</div>
-            <div class="order-meta">
-              <span>{{ order.customerName }}</span>
-              <span>{{ order.materialSpec }}</span>
-              <span>{{ order.quantity }}件</span>
-            </div>
-            <div class="order-footer">
-              <span class="badge" :class="order.status === 'delayed' ? 'badge-danger' : 'badge-success'">
-                {{ order.status === 'delayed' ? '延期' : '进行中' }}
-              </span>
-              <span class="order-due">交期 {{ order.dueDate }}</span>
-            </div>
+        <div v-if="store.data?.recentTasks?.length" class="task-list">
+          <div v-for="task in store.data.recentTasks" :key="task.id" class="task-item">
+            <span class="priority" :class="getPriorityClass(task.priority)">{{ task.priority }}</span>
+            <span class="task-status badge" :class="getStatusLabel(task.status)">{{ getStatusLabel(task.status) }}</span>
+            <span class="task-qty">{{ task.quantity }}件</span>
           </div>
         </div>
+        <div v-else class="empty">暂无任务</div>
       </div>
 
-      <!-- Right Panel -->
-      <div class="right-panel">
-        <!-- Machines -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">🏭 机器状态</div>
-            <span class="badge badge-success">
-              {{ store.data?.machines.filter(m => m.status === 'running').length || 0 }} 运行中
-            </span>
-          </div>
-          <div class="machines-grid">
-            <div
-              v-for="machine in store.data?.machines"
-              :key="machine.id"
-              class="machine-item"
-            >
-              <div class="machine-status">
-                <span class="status-dot" :class="machine.status"></span>
-                <span class="machine-code">{{ machine.code }}</span>
-              </div>
-              <div class="machine-type">{{ machine.type }}</div>
-              <div class="machine-name">{{ machine.name }}</div>
-            </div>
+      <!-- 机器状态 -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">🏭 机器状态</div>
+        </div>
+        <div v-if="store.data?.machines?.length" class="machine-list">
+          <div v-for="m in store.data.machines" :key="m.id" class="machine-item">
+            <span class="status-dot" :class="m.status"></span>
+            <span class="machine-code">{{ m.code }}</span>
+            <span class="badge" :class="getMachineStatusClass(m.status)">{{ m.status }}</span>
           </div>
         </div>
-
-        <!-- Personnel -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">👥 人员在岗</div>
-          </div>
-          <div class="personnel-list">
-            <div
-              v-for="worker in store.data?.workers"
-              :key="worker.id"
-              class="personnel-item"
-            >
-              <div class="personnel-avatar">{{ worker.name.charAt(0) }}</div>
-              <div class="personnel-info">
-                <div class="personnel-name">{{ worker.name }}</div>
-                <div class="personnel-role">{{ worker.role }} · {{ worker.team }}</div>
-              </div>
-              <span class="badge badge-success">在岗</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pipeline -->
-    <div class="card pipeline-card">
-      <div class="card-header">
-        <div class="card-title">🔄 工序流 Pipeline</div>
-      </div>
-      <div class="pipeline">
-        <template v-for="(stage, index) in store.data?.pipeline" :key="stage.stage">
-          <div class="pipeline-stage">
-            <div class="pipeline-stage-count">{{ stage.count }}</div>
-            <div class="pipeline-stage-name">{{ getPipelineStageName(stage.stage) }}</div>
-          </div>
-          <span v-if="index < (store.data?.pipeline.length || 0) - 1" class="pipeline-arrow">→</span>
-        </template>
+        <div v-else class="empty">暂无机器数据</div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.orders-panel {
-  max-height: 480px;
-  overflow-y: auto;
-}
-
-.orders-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.order-item {
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition);
-}
-
-.order-item:hover {
-  border-color: var(--border);
-  box-shadow: var(--shadow-sm);
-}
-
-.order-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.order-code {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.order-product {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.order-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--fg-secondary);
-  margin-bottom: 8px;
-}
-
-.order-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.order-due {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.right-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.machines-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.machine-item {
-  padding: 10px;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-}
-
-.machine-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.machine-code {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.machine-type {
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.machine-name {
-  font-size: 12px;
-  color: var(--fg-secondary);
-  margin-top: 2px;
-}
-
-.personnel-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.personnel-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px;
-  border-radius: var(--radius-sm);
-}
-
-.personnel-item:hover {
-  background: var(--surface-alt);
-}
-
-.personnel-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--accent-light);
-  color: var(--accent-dark);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.personnel-info {
-  flex: 1;
-}
-
-.personnel-name {
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.personnel-role {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.pipeline-card {
-  margin-top: 0;
-}
-
-@media (max-width: 768px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .machines-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.task-list { display: flex; flex-direction: column; gap: 6px; }
+.task-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+.task-qty { margin-left: auto; font-size: 12px; color: var(--muted); }
+.machine-list { display: flex; flex-direction: column; gap: 6px; }
+.machine-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-light); }
+.machine-code { font-family: var(--font-mono); font-size: 13px; }
+.empty { text-align: center; padding: 20px; color: var(--muted); font-size: 13px; }
+@media (max-width: 768px) { .dashboard-grid { grid-template-columns: 1fr; } }
 </style>

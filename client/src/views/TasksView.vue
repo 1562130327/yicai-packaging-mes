@@ -1,89 +1,73 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useTasksStore } from '@/stores/tasks'
 import { workersApi, type Worker } from '@/api/workers'
-import { api } from '@/api/request'
 
 const auth = useAuthStore()
+const taskStore = useTasksStore()
 const workers = ref<Worker[]>([])
-const selectedWorker = ref<string>('')
-const tasks = ref<any[]>([])
+const selectedWorker = ref('')
 const loading = ref(true)
-const loadingTasks = ref(false)
-const actionLoading = ref<string | null>(null)
 
-// 师傅自动选自己
 const isWorkerView = computed(() => auth.user?.role === 'worker')
 
-function getPriorityClass(p: string) {
-  return { deadline: 'priority-p0', urgent: 'priority-p1', normal: 'priority-p2', attention: 'priority-p3', unmentioned: 'priority-p4' }[p] || ''
+function getPriorityClass(p: number) {
+  if (p >= 5) return 'priority-p0'
+  if (p >= 4) return 'priority-p1'
+  if (p >= 3) return 'priority-p2'
+  if (p >= 2) return 'priority-p3'
+  return 'priority-p4'
 }
-function getPriorityLabel(p: string) {
-  return { deadline: 'P0 紧急', urgent: 'P1 高', normal: 'P2 中', attention: 'P3 低', unmentioned: 'P4 最低' }[p] || p
+function getPriorityLabel(p: number) {
+  if (p >= 5) return 'P0 紧急'
+  if (p >= 4) return 'P1 高'
+  if (p >= 3) return 'P2 中'
+  if (p >= 2) return 'P3 低'
+  return 'P4 最低'
 }
-function getStepTypeLabel(t: string) {
-  return { cutting: '下料', slicing: '裁切', welding: '焊接', pressing: '压合', inspection: '检验', packaging: '入库' }[t] || t
+function getStatusLabel(s: string) {
+  return { pending: '待分配', assigned: '已分配', running: '进行中', completed: '已完成', paused: '已暂停', cancelled: '已取消' }[s] || s
+}
+function getStatusClass(s: string) {
+  return { pending: 'badge-warning', assigned: 'badge-info', running: 'badge-success', completed: '', paused: 'badge-danger', cancelled: '' }[s] || ''
 }
 
 async function loadTasks() {
-  if (!selectedWorker.value) return
-  loadingTasks.value = true
-  try {
-    const res = await workersApi.getTasks(selectedWorker.value)
-    if (res.success) tasks.value = res.data.tasks || []
-  } finally { loadingTasks.value = false }
+  if (isWorkerView.value) {
+    await taskStore.fetchTasks({ workerId: auth.user?.id })
+  } else if (selectedWorker.value) {
+    await taskStore.fetchTasks({ workerId: selectedWorker.value })
+  } else {
+    await taskStore.fetchTasks()
+  }
 }
 
-// 操作：开始工序
-async function startTask(task: any) {
-  actionLoading.value = task.id
-  try {
-    await api.put('/processes/advance', { flowId: task.flowId, stepId: task.stepId, toStatus: 'running' })
-    task.stepStatus = 'running'
-  } finally { actionLoading.value = null }
+async function handleStart(taskId: string) {
+  await taskStore.startTask(taskId)
 }
 
-// 操作：完成工序
-async function completeTask(task: any) {
-  actionLoading.value = task.id
-  try {
-    await api.post('/processes/complete', {
-      flowId: task.flowId, stepId: task.stepId,
-      quantity: task.requiredQty || 1, worker: auth.user?.name || 'unknown',
-      defectQty: 0, notes: ''
-    })
-    tasks.value = tasks.value.filter(t => t.id !== task.id)
-  } finally { actionLoading.value = null }
+async function handleComplete(task: any) {
+  const qty = prompt(`完成数量（共 ${task.quantity}）：`, String(task.quantity))
+  if (qty === null) return
+  await taskStore.completeTask(task.id, parseInt(qty) || 0, 0)
 }
 
-// 操作：反馈异常
-async function feedbackTask(task: any) {
-  const desc = prompt('请输入异常描述：')
-  if (!desc) return
-  actionLoading.value = task.id
-  try {
-    await api.post('/feedback', {
-      orderId: task.orderId, processStepId: task.stepId, flowId: task.flowId,
-      type: 'other', description: desc, severity: 'medium'
-    })
-    alert('反馈已提交，工序已暂停')
-    loadTasks()
-  } finally { actionLoading.value = null }
+async function handlePause(taskId: string) {
+  const reason = prompt('暂停原因：')
+  if (reason === null) return
+  await taskStore.pauseTask(taskId, reason || '手动暂停')
 }
 
 onMounted(async () => {
   try {
-    // 管理员/跟单员需要选师傅，师傅自动加载自己的任务
-    if (isWorkerView.value) {
-      // 师傅：用用户名作为worker标识
-      selectedWorker.value = auth.user?.id || ''
-    } else {
+    if (!isWorkerView.value) {
       const res = await workersApi.list()
       if (res.success) workers.value = res.data
     }
+    await taskStore.fetchStats()
+    await loadTasks()
   } finally { loading.value = false }
-
-  if (selectedWorker.value) loadTasks()
 })
 </script>
 
@@ -91,53 +75,43 @@ onMounted(async () => {
   <div>
     <div class="section-header">
       <div class="section-title">{{ isWorkerView ? '📋 我的任务' : '📋 任务管理' }}</div>
+      <div class="stats-bar" v-if="taskStore.stats">
+        <span class="stat-item">待分配: {{ taskStore.stats.pending }}</span>
+        <span class="stat-item">进行中: {{ taskStore.stats.running }}</span>
+        <span class="stat-item">已完成: {{ taskStore.stats.completed }}</span>
+      </div>
     </div>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <!-- 筛选 -->
+    <div v-if="!isWorkerView" class="filter-bar card">
+      <select v-model="selectedWorker" class="form-input form-select" style="max-width:250px" @change="loadTasks">
+        <option value="">全部师傅</option>
+        <option v-for="w in workers" :key="w.id" :value="w.id">{{ w.name }} - {{ w.role }}</option>
+      </select>
+    </div>
 
-    <div v-else>
-      <!-- 管理员/跟单员：选择师傅 -->
-      <div v-if="!isWorkerView" class="form-group" style="max-width: 300px; margin-bottom: 20px;">
-        <label class="form-label">选择师傅</label>
-        <select v-model="selectedWorker" class="form-input form-select" @change="loadTasks">
-          <option value="">请选择...</option>
-          <option v-for="w in workers" :key="w.id" :value="w.id">{{ w.name }} - {{ w.role }}</option>
-        </select>
-      </div>
+    <div v-if="loading || taskStore.loading" class="loading">加载中...</div>
 
-      <div v-if="loadingTasks" class="loading">加载任务...</div>
+    <div v-else-if="taskStore.tasks.length === 0" class="empty">暂无任务</div>
 
-      <div v-else-if="tasks.length === 0 && selectedWorker" class="empty">暂无任务</div>
-
-      <div v-else class="tasks-list">
-        <div v-for="task in tasks" :key="task.id" class="task-card card">
-          <div class="task-header">
-            <span class="priority" :class="getPriorityClass(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
-            <span class="task-code">{{ task.orderCode }}</span>
-          </div>
-          <div class="task-product">{{ task.productCode }}</div>
-          <div class="task-meta">
-            <span>{{ task.customerName }}</span>
-            <span>{{ getStepTypeLabel(task.stepType) }}</span>
-          </div>
-          <div class="task-footer">
-            <span class="badge" :class="task.stepStatus === 'running' ? 'badge-success' : 'badge-info'">
-              {{ task.stepStatus === 'running' ? '进行中' : '待处理' }}
-            </span>
-            <div class="task-actions">
-              <button v-if="task.stepStatus !== 'running'" class="btn btn-sm btn-primary"
-                :disabled="actionLoading === task.id" @click="startTask(task)">
-                {{ actionLoading === task.id ? '...' : '开始' }}
-              </button>
-              <button v-if="task.stepStatus === 'running'" class="btn btn-sm"
-                :disabled="actionLoading === task.id" @click="completeTask(task)">
-                {{ actionLoading === task.id ? '...' : '完成' }}
-              </button>
-              <button class="btn btn-sm" :disabled="actionLoading === task.id" @click="feedbackTask(task)">
-                反馈
-              </button>
-            </div>
-          </div>
+    <div v-else class="tasks-list">
+      <div v-for="task in taskStore.tasks" :key="task.id" class="task-card card">
+        <div class="task-header">
+          <span class="priority" :class="getPriorityClass(task.priority)">{{ getPriorityLabel(task.priority) }}</span>
+          <span class="badge" :class="getStatusClass(task.status)">{{ getStatusLabel(task.status) }}</span>
+        </div>
+        <div class="task-info">
+          <div class="task-label">任务ID</div>
+          <div class="task-value mono">{{ task.id.slice(0, 8) }}...</div>
+        </div>
+        <div class="task-info">
+          <div class="task-label">数量</div>
+          <div class="task-value">{{ task.quantity }} (已完成: {{ task.completedQty }})</div>
+        </div>
+        <div class="task-actions">
+          <button v-if="task.status === 'assigned'" class="btn btn-sm btn-primary" @click="handleStart(task.id)">开始</button>
+          <button v-if="task.status === 'running'" class="btn btn-sm" @click="handleComplete(task)">完成</button>
+          <button v-if="task.status === 'running'" class="btn btn-sm" style="color:var(--warning)" @click="handlePause(task.id)">暂停</button>
         </div>
       </div>
     </div>
@@ -147,12 +121,15 @@ onMounted(async () => {
 <style scoped>
 .loading { text-align: center; padding: 40px; color: var(--muted); }
 .empty { text-align: center; padding: 40px; color: var(--muted); }
+.stats-bar { display: flex; gap: 16px; font-size: 13px; color: var(--fg-secondary); }
+.stat-item { font-weight: 500; }
+.filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 12px 16px; }
 .tasks-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .task-card { padding: 14px; }
-.task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-.task-code { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
-.task-product { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-.task-meta { display: flex; gap: 12px; font-size: 12px; color: var(--fg-secondary); margin-bottom: 8px; }
-.task-footer { display: flex; justify-content: space-between; align-items: center; }
-.task-actions { display: flex; gap: 6px; }
+.task-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.task-info { margin-bottom: 4px; }
+.task-label { font-size: 11px; color: var(--muted); }
+.task-value { font-size: 13px; }
+.mono { font-family: var(--font-mono); }
+.task-actions { display: flex; gap: 6px; margin-top: 8px; }
 </style>
