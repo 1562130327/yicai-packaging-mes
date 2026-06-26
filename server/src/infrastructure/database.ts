@@ -10,7 +10,8 @@ export function initDatabase(dbPath: string): Database.Database {
 
   // 启用 WAL 模式，提高并发性能
   db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  // 暂时禁用外键约束（兼容旧数据）
+  db.pragma('foreign_keys = OFF');
 
   console.log(`[DB] Connected to: ${dbPath}`);
   return db;
